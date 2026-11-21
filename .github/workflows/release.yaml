@@ -3,34 +3,58 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      - "*"
 
 jobs:
-  release:
-    runs-on: windows-latest
+  # Test + `xmake package` per OS: build/packages/<target>-<version>-<plat>-<arch>.zip
+  #   windows: xSE plugins + hkdump.exe, linux / macos: hkdump
+  package:
+    name: package (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     permissions:
-      contents: write
+      contents: read
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            targets: "" # all default targets
+          - os: ubuntu-24.04 # C++23 <print> needs GCC 14
+            targets: hkdump
+          - os: macos-latest # Apple clang (Xcode 16+)
+            targets: hkdump
 
     steps:
       - uses: actions/checkout@v7.0.1
 
-      - uses: xmake-io/github-action-setup-xmake@v1
-        with:
-          xmake-version: "3.0.6"
-          actions-cache-folder: ".xmake-cache"
-          actions-cache-key: ${{ runner.os }}-xmake-release-cache-
-
-      - name: Configure
-        run: xmake f -p windows -a x64 -m releasedbg -y
+      - uses: ./.github/actions/setup-xmake # xmake + package cache + configure (GCC 14 on Linux)
 
       - name: Test
         run: xmake test -y
 
-      - name: Package # build/packages/<plugin>-<version>.zip
-        run: xmake package -y
+      - name: Package
+        run: xmake package -y ${{ matrix.targets }}
+
+      # transit only: download-artifact unpacks this layer again in the release job
+      - uses: actions/upload-artifact@v7
+        with:
+          name: packages-${{ runner.os }}
+          path: build/packages/*.zip
+          if-no-files-found: error
+
+  release:
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: packages-*
+          path: dist
+          merge-multiple: true
 
       - name: Create GitHub Release (gh)
-        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "${{ github.ref_name }}" build/packages/*.zip --generate-notes
+        run: gh release create "${{ github.ref_name }}" dist/*.zip --repo "${{ github.repository }}" --generate-notes

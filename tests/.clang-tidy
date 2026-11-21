@@ -1,5 +1,0 @@
-InheritParentConfig: true
-Checks:
-  - -misc-use-anonymous-namespace # Catch2 TEST_CASE expands to static functions
-  - -cppcoreguidelines-avoid-non-const-global-variables # fake `.data` regions for the scanner
-  - -clang-analyzer-optin.core.EnumCastOutOfRange # Catch2 internal flag enum

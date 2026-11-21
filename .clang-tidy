@@ -29,10 +29,12 @@ Checks:
   - -readability-identifier-length # `c`, `m`, `w` in short scopes
   - -readability-implicit-bool-conversion # noise
   - -readability-magic-numbers # Havok offsets / sizes everywhere
+  - -readability-redundant-member-init # `x{}` is required by clang -Wmissing-designated-field-initializers
+  - -readability-trailing-comma
 
 WarningsAsErrors: "*"
 
-HeaderFilterRegex: '.*[\\/](src|tests)[\\/].*' # own code only (not CommonLibF4 / spdlog / catch2)
+HeaderFilterRegex: '.*[\\/](src|tests)[\\/].*' # own code only (not catch2 / SDK headers)
 SystemHeaders: false
 
 CheckOptions:

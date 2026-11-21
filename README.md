@@ -1,0 +1,85 @@
+# havok_layout_dumper
+
+Dumps Havok `hkClass` reflection data (class layouts, enums, signatures) from
+**Fallout 4**, **Skyrim SE / AE** and **Skyrim LE** into [serde-hkx] class JSON
+(`serde-hkx/assets/classes/*.json` format).
+
+Havok builds its `hkClass` tables in static initializers, so they only exist while the game is
+running. The work is split in two:
+
+1. **In game** — a tiny script extender plugin copies `.rdata` / `.data` of the game executable
+   into a snapshot file once the game is up.
+2. **Offline** — the `hkdump` CLI decodes that snapshot into one JSON file per class.
+   It runs on Windows, Linux and macOS and reads both x86 and x64 snapshots.
+
+| Game                | Plugin                   | Arch | Snapshot taken at |
+| ------------------- | ------------------------ | ---- | ----------------- |
+| Fallout 4 / VR      | `hkdump_f4se` (F4SE)     | x64  | main menu         |
+| Skyrim SE / AE / VR | `hkdump_skse64` (SKSE64) | x64  | data loaded       |
+| Skyrim LE           | `hkdump_skse` (SKSE)     | x86  | data loaded       |
+
+The plugins only read their own process image: they use no address library and no game
+structures, so they work across runtime versions.
+
+## Usage
+
+1. Install the plugin for your game (`Data/F4SE/Plugins` or `Data/SKSE/Plugins`), e.g. with a mod manager.
+
+2. Start the game through the script extender and wait for the main menu.
+
+3. Find the snapshot in `Data/hkdump_snapshots/<exe>.hksnap`
+   (with MO2 it ends up in the _overwrite_ folder). A log is written next to it.
+
+4. Decode it:
+
+   ```sh
+   hkdump Fallout4.hksnap out/        # -v: also list the classes found
+   ```
+
+### Output notes
+
+- One `<ClassName>.json` per class. Duplicate names get an `_<RVA>` suffix.
+- Only the snapshot's architecture is known: x64 snapshots fill `*_x86_64` fields,
+  x86 snapshots fill `*_x86` fields, the other side is `0`.
+- `signature` matches Havok's `hkClass::getSignature`
+  (verified against the class signatures in Fallout 4's own `.hkx` files).
+- `default`: integers / enums as values, `hkReal` / `hkHalf` as raw bits.
+
+## Build
+
+Requires [xmake] and a C++23 compiler (MSVC 2022+, GCC 14+, Apple clang 16+).
+
+```sh
+xmake            # hkdump (+ plugins on Windows)
+xmake test       # unit tests
+xmake package    # build/packages/<target>-<version>-<plat>-<arch>.zip
+xmake fmt        # clang-format
+xmake lint       # clang-format check + clang-tidy (LLVM >= 22)
+```
+
+Layout (workspace: the root `xmake.lua` lists the members; each has its own `xmake.lua`, `src/`, `tests/`):
+
+- `crates/snapshot` — `.hksnap` format + PE image (shared: written by the plugins, read by `hkdump`)
+- `crates/plugin` — script extender plugins (Windows only)
+- `crates/hkdump` — CLI + platform independent decoder (`hkClass` scanning, signature, JSON)
+
+## References
+
+- [serde-hkx] — output format; Skyrim class data used to verify the signature algorithm
+- [d-merge-serde-hkx] — x86 / x64 offsets of the `hkClass*` structs
+- [HKX2Library], [hkxcmd] — origin of that layout data
+- [CommonLibF4], [F4SE], [SKSE64] / [SKSE] — plugin ABI
+
+## License
+
+`MIT OR Apache-2.0` — see [LICENSE_NOTES.md](LICENSE_NOTES.md) for details and third party notices.
+
+[serde-hkx]: https://github.com/SARDONYX-sard/serde-hkx
+[d-merge-serde-hkx]: https://github.com/SARDONYX-forks/d-merge-serde-hkx
+[HKX2Library]: https://github.com/ret2end/HKX2Library
+[hkxcmd]: https://github.com/figment/hkxcmd
+[CommonLibF4]: https://github.com/alandtse/CommonLibF4
+[F4SE]: https://f4se.silverlock.org/
+[SKSE64]: https://skse.silverlock.org/
+[SKSE]: https://skse.silverlock.org/
+[xmake]: https://github.com/xmake-io/xmake

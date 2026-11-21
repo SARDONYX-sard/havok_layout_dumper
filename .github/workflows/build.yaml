@@ -7,29 +7,62 @@ on:
     types: [opened, reopened, synchronize]
   workflow_dispatch:
 
+# Artifacts are uploaded unpacked (`xmake install -o`): upload-artifact zips them itself, so
+# uploading `xmake package` zips would produce zip-in-zip downloads.
 jobs:
-  build:
+  plugins:
+    name: plugin (${{ matrix.plugin }})
     runs-on: windows-latest
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin: [hkdump_f4se, hkdump_skse64, hkdump_skse]
 
     steps:
       - uses: actions/checkout@v7
 
-      - uses: xmake-io/github-action-setup-xmake@v1
+      - uses: ./.github/actions/setup-xmake # xmake + package cache + configure (GCC 14 on Linux)
+
+      - name: Build
+        run: xmake build -y ${{ matrix.plugin }}
+
+      - name: Install # build/artifact/Data/<F4SE|SKSE>/Plugins/<plugin>.dll
+        run: xmake install -o build/artifact ${{ matrix.plugin }}
+
+      - uses: actions/upload-artifact@v7
         with:
-          xmake-version: "3.0.6"
-          actions-cache-folder: ".xmake-cache"
-          actions-cache-key: ${{ runner.os }}-xmake-build-cache-
+          name: ${{ matrix.plugin }}
+          path: build/artifact/
+          if-no-files-found: error # e.g. a target silently missing on a wrong plat
 
-      - name: Configure
-        run: xmake f -p windows -a x64 -m releasedbg -y
+  hkdump:
+    name: hkdump (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+          - os: ubuntu-24.04 # C++23 <print> needs GCC 14
+          - os: macos-latest # Apple clang (Xcode 16+)
 
-      - name: Package # build/packages/<plugin>-<version>.zip
-        run: xmake package -y
+    steps:
+      - uses: actions/checkout@v7
 
-      - name: Upload a Build Artifact
-        uses: actions/upload-artifact@v7
+      - uses: ./.github/actions/setup-xmake # xmake + package cache + configure (GCC 14 on Linux)
+
+      - name: Build
+        run: xmake build -y hkdump
+
+      - name: Install # build/artifact/hkdump(.exe)
+        run: xmake install -o build/artifact hkdump
+
+      - uses: actions/upload-artifact@v7
         with:
-          name: package
-          path: build/packages/*.zip
+          name: hkdump-${{ runner.os }}
+          path: build/artifact/
+          if-no-files-found: error # e.g. a target silently missing on a wrong plat

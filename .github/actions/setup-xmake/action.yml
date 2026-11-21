@@ -1,0 +1,52 @@
+name: Setup xmake
+description: >-
+  Install xmake, restore its package cache (catch2, ...) and configure the project.
+  Linux uses GCC 14 (C++23 <print>); Windows / macOS use the default toolchain (MSVC / Apple clang).
+
+inputs:
+  configure:
+    description: Extra `xmake f` arguments (e.g. `-p windows -a x64`).
+    required: false
+    default: ""
+  mode:
+    description: Build mode.
+    required: false
+    default: releasedbg
+
+runs:
+  using: composite
+  steps:
+    # xmake packages live under the workspace so actions/cache can keep them:
+    # `actions-cache-folder` of setup-xmake only caches xmake itself.
+    - name: Set xmake global dir
+      shell: bash
+      run: echo "XMAKE_GLOBALDIR=${GITHUB_WORKSPACE}/.xmake-global" >> "$GITHUB_ENV"
+
+    - uses: xmake-io/github-action-setup-xmake@v1
+      with:
+        xmake-version: "3.0.6"
+        actions-cache-folder: ".xmake-cache"
+        actions-cache-key: ${{ runner.os }}-xmake-
+
+    - name: Cache xmake packages
+      uses: actions/cache@v6
+      with:
+        path: .xmake-global/.xmake/packages
+        key: ${{ runner.os }}-${{ runner.arch }}-xmake-packages-${{ hashFiles('xmake.lua') }}
+        restore-keys: ${{ runner.os }}-${{ runner.arch }}-xmake-packages-
+
+    - name: Install GCC 14
+      if: runner.os == 'Linux'
+      shell: bash
+      run: sudo apt-get update && sudo apt-get install -y g++-14
+
+    - name: Configure
+      shell: bash
+      run: |
+        args=(-y -m "${{ inputs.mode }}")
+        case "$RUNNER_OS" in
+          # this step runs in Git Bash (MSYS): without `-p windows` xmake picks the `msys` plat + MinGW
+          Windows) args+=(-p windows) ;;
+          Linux) args+=(--cc=gcc-14 --cxx=g++-14 --ld=g++-14) ;;
+        esac
+        xmake f "${args[@]}" ${{ inputs.configure }}

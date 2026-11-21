@@ -9,11 +9,11 @@ function exec_xmake(args)
   os.execv(os.programfile(), args)
 end
 
---- Own C++ sources (src/, tests/).
+--- Own C++ sources (workspace members under crates/).
 ---@return string[] files absolute paths
 function source_files()
   local files = {}
-  for _, pattern in ipairs({"src/**.cpp", "src/**.h", "tests/**.cpp", "tests/**.h"}) do
+  for _, pattern in ipairs({"crates/**.cpp", "crates/**.h"}) do
     table.join2(files, os.files(path.join(os.projectdir(), pattern)))
   end
   return files
@@ -59,53 +59,61 @@ function clang_format(explicit, fix)
   os.execv(tool, argv)
 end
 
---- Run clang-tidy over the compile database (build/tidy), with MSVC precompiled header flags removed.
+--- C++ standard of the project for clang (`c++23`), from `set_languages` (`c++23` / `cxx23`).
+---@return string std clang `-std=` value
+function project_cxx_std()
+  import("core.project.project")
+
+  for _, target in pairs(project.targets()) do
+    for _, lang in ipairs(table.wrap(target:get("languages"))) do
+      local ver = lang:match("^c%+%+(%w+)$") or lang:match("^cxx(%w+)$")
+      if ver then
+        return "c++" .. ver
+      end
+    end
+  end
+  return "c++23"
+end
+
+--- Run `xmake check clang.tidy` (parallel) over the own sources, on a compile database (build/tidy)
+--- whose C++ standard flag clang understands.
 ---@param explicit string? clang-tidy path (auto detect when nil)
 ---@param fix boolean apply fixes (`--fix`)
 function clang_tidy(explicit, fix)
   import("core.base.json")
-  import("core.project.config")
 
   local tool = find_llvm_tool("clang-tidy", explicit)
 
-  config.load()
-  local mode = config.mode()
   local dbdir = path.absolute("build/tidy")
   exec_xmake({"project", "-k", "compile_commands", dbdir})
 
-  -- clang-tidy cannot read MSVC precompiled headers (/Yu, /Yc, /Fp): drop them and
-  -- force-include the original PCH source instead of the generated copy under build/.gens.
+  -- The MSVC `/std:` spelling depends on the xmake / MSVC versions (`c++23preview`, `c++23`, `c++latest`)
+  -- and clang-cl silently falls back to C++14 on one it does not know: pass the standard to clang directly.
+  -- GCC style drivers already use `-std=`, which clang understands.
+  local stdflag = "/clang:-std=" .. project_cxx_std()
   local dbfile = path.join(dbdir, "compile_commands.json")
-  local files = {}
-  local entries = {}
-  for _, entry in ipairs(json.loadfile(dbfile)) do
-    local args = {}
-    for _, arg in ipairs(entry.arguments) do
-      if arg:startswith("/Yu") or arg:startswith("/Yc") or arg:startswith("/Fp") then
-        -- skip
-      elseif arg:startswith("/FI") and path.unix(arg):find("/.gens/", 1, true) then
-        local rel = path.unix(arg):match("/" .. mode .. "/(.+)$")
-        table.insert(args, "/FI" .. path.join(os.projectdir(), rel))
-      else
-        table.insert(args, arg)
+  local entries = json.loadfile(dbfile)
+  for _, entry in ipairs(entries) do
+    local compiler = path.basename(entry.arguments[1]):lower()
+    if compiler == "cl" or compiler == "clang-cl" then
+      local args = {entry.arguments[1], stdflag}
+      for idx, arg in ipairs(entry.arguments) do
+        if idx > 1 and not arg:startswith("/std:") and not arg:startswith("-std:") then
+          table.insert(args, arg)
+        end
       end
-    end
-    entry.arguments = args
-    table.insert(entries, entry)
-
-    -- own sources only (skip generated plugin.cpp etc.)
-    local file = path.absolute(entry.file, entry.directory)
-    if not path.unix(file):find("/.gens/", 1, true) then
-      table.insert(files, file)
+      entry.arguments = args
     end
   end
   json.savefile(dbfile, entries)
 
-  local argv = {"-p", dbdir, "--quiet"}
+  -- `xmake check clang.tidy` looks clang-tidy up on PATH only (else installs the llvm package):
+  -- put the detected one first. `-f`: tests/ sources only exist in `add_tests` clones, not in a target.
+  local argv = {"check", "clang.tidy", "--quiet", "--compdb=" .. dbdir, "-f", "crates/**.cpp"}
   if fix then
-    table.insert(argv, "--fix")
+    table.join2(argv, {"--fix", "--jobs=1"}) -- serial: parallel jobs would rewrite shared headers concurrently
   end
-  table.join2(argv, files)
-  print("> %s%s (%d files)", tool, fix and " --fix" or "", #files)
-  os.execv(tool, argv)
+  local pathenv = path.directory(tool) .. path.envsep() .. (os.getenv("PATH") or "")
+  print("> xmake %s (%s)", table.concat(argv, " "), tool)
+  os.execv(os.programfile(), argv, {envs = {PATH = pathenv}})
 end

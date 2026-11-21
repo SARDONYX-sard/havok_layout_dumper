@@ -8,22 +8,37 @@ on:
   workflow_dispatch:
 
 jobs:
+  # hkdump (snapshot -> JSON) and its core are platform independent: build + unit test everywhere.
+  # The xSE plugins are Windows only and are covered by build.yaml.
   test:
-    runs-on: windows-latest
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+          - os: ubuntu-24.04 # C++23 <print> needs GCC 14
+          - os: macos-latest # Apple clang (Xcode 16+)
 
     steps:
       - uses: actions/checkout@v7
 
-      - uses: xmake-io/github-action-setup-xmake@v1
-        with:
-          xmake-version: "3.0.6"
-          actions-cache-folder: ".xmake-cache"
-          actions-cache-key: ${{ runner.os }}-xmake-test-cache-
+      - uses: ./.github/actions/setup-xmake # xmake + package cache + configure (GCC 14 on Linux)
 
-      - name: Configure
-        run: xmake f -p windows -a x64 -m releasedbg -y
+      - name: Build hkdump
+        run: xmake build -y hkdump
 
       - name: Test
         run: xmake test -y
+
+      - name: hkdump usage
+        shell: bash
+        run: |
+          # no arguments -> usage message + non-zero exit
+          set +e
+          out=$(xmake run hkdump 2>&1); code=$?
+          echo "$out"
+          test $code -ne 0 && grep -q "usage: hkdump" <<< "$out"

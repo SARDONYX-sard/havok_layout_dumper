@@ -90,7 +90,7 @@ IncludeCategories:
   # std (no extension, no slash): <vector>, <cstdint>, ...
   - Regex: '^<[a-z_0-9]+>$'
     Priority: 1
-  # external: <F4SE/F4SE.h>, <RE/Fallout.h>, <spdlog/...>, <Windows.h>
+  # external: <catch2/...>, <Windows.h>, ...
   - Regex: '^<.*>$'
     Priority: 2
   # crate local: "Dumper.h"

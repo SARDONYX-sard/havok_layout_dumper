@@ -25,6 +25,7 @@
     "Dont",
     "dstfiles",
     "dxgi",
+    "elifdef",
     "execv",
     "extraconf",
     "FILEFLAGS",
@@ -63,6 +64,7 @@
     "RTTI",
     "scriptdir",
     "serde",
+    "skse",
     "Skyrim",
     "srcfiles",
     "startswith",
@@ -83,10 +85,18 @@
   ],
   "Lua.workspace.ignoreDir": [
     "xmake.lua",
+    "/crates/hkdump/xmake.lua",
+    "/crates/plugin/xmake.lua",
+    "/crates/snapshot/xmake.lua",
+    "/scripts/xmake/rules.lua",
     "/scripts/xmake/task_utils.lua",
     "/scripts/xmake/tasks.lua"
   ],
   "files.associations": {
+    "**/crates/hkdump/xmake.lua": "xmake",
+    "**/crates/plugin/xmake.lua": "xmake",
+    "**/crates/snapshot/xmake.lua": "xmake",
+    "**/scripts/xmake/rules.lua": "xmake",
     "**/scripts/xmake/task_utils.lua": "xmake",
     "**/scripts/xmake/tasks.lua": "xmake"
   }

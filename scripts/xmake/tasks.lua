@@ -1,7 +1,7 @@
 -- npm-script like tasks (built-ins cover the rest: `xmake test`, `xmake package`).
 --
 --   xmake fmt        clang-format -i
---   xmake lint       clang-format --dry-run -Werror + clang-tidy
+--   xmake lint       clang-format --dry-run -Werror + clang-tidy (`xmake check clang.tidy`)
 --   xmake lint:fix   clang-format -i + clang-tidy --fix
 --
 -- Tools are auto detected (PATH, then LLVM bundled with Visual Studio); both must be >= 22.

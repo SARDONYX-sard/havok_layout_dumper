@@ -1,0 +1,29 @@
+name: Test
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    types: [opened, reopened, synchronize]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: "3.0.6"
+          actions-cache-folder: ".xmake-cache"
+          actions-cache-key: ${{ runner.os }}-xmake-test-cache-
+
+      - name: Configure
+        run: xmake f -p windows -a x64 -m releasedbg -y
+
+      - name: Test
+        run: xmake test -y

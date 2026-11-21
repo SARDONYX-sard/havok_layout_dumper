@@ -1,0 +1,99 @@
+# Rust (rustfmt) flavored C++ style.
+# Mirrors d-merge/.rustfmt.toml:
+#   max_width = 120, use_small_heuristics = "Max",
+#   group_imports = "StdExternalCrate", reorder_imports = true
+Language: Cpp
+BasedOnStyle: LLVM
+Standard: Latest
+
+# --- width / indent (rustfmt: max_width = 120, 4 spaces, no tabs)
+ColumnLimit: 120
+IndentWidth: 4
+ContinuationIndentWidth: 4
+TabWidth: 4
+UseTab: Never
+LineEnding: DeriveLF
+InsertNewlineAtEOF: true
+MaxEmptyLinesToKeep: 1 # rustfmt: blank_lines_upper_bound = 1
+KeepEmptyLines:
+  AtStartOfBlock: false
+  AtStartOfFile: false
+  AtEndOfFile: false
+
+# --- braces (rustfmt: K&R, always braces)
+BreakBeforeBraces: Attach
+InsertBraces: true
+RemoveSemicolon: true
+
+# --- namespaces ~ `mod { ... }`
+NamespaceIndentation: All
+FixNamespaceComments: false
+CompactNamespaces: false
+
+# --- classes
+AccessModifierOffset: -4
+EmptyLineBeforeAccessModifier: LogicalBlock
+EmptyLineAfterAccessModifier: Never
+BreakConstructorInitializers: BeforeComma
+PackConstructorInitializers: CurrentLine
+
+# --- small heuristics "Max": keep things on one line when they fit
+AllowShortFunctionsOnASingleLine: All
+AllowShortLambdasOnASingleLine: All
+AllowShortBlocksOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortEnumsOnASingleLine: false
+AllowShortCompoundRequirementOnASingleLine: true
+
+# --- wrapping: rustfmt style "one per line + closing bracket on its own line"
+AlignAfterOpenBracket: BlockIndent
+BinPackArguments: false
+BinPackParameters: OnePerLine
+AllowAllArgumentsOnNextLine: true
+AllowAllParametersOfDeclarationOnNextLine: true
+BreakBeforeBinaryOperators: All # rustfmt breaks before `&&`, `||`, `+`, ...
+BreakBeforeTernaryOperators: true
+BreakTemplateDeclarations: Yes # like a `where` / generic header line
+AlwaysBreakBeforeMultilineStrings: false
+BreakStringLiterals: false
+Cpp11BracedListStyle: true
+BinPackLongBracedList: false # trailing comma => one element per line
+
+# --- no column alignment (rustfmt never aligns), except trailing comments
+AlignArrayOfStructures: None
+AlignConsecutiveAssignments: None
+AlignConsecutiveBitFields: None
+AlignConsecutiveDeclarations: None
+AlignConsecutiveMacros: None
+AlignEscapedNewlines: DontAlign
+AlignOperands: DontAlign
+AlignTrailingComments: # exception: keep `// 00` offset comments in a column
+  Kind: Always
+  OverEmptyLines: 0
+SpacesBeforeTrailingComments: 1
+
+# --- pointers / refs like `&T`, `*const T`
+PointerAlignment: Left
+ReferenceAlignment: Left
+DerivePointerAlignment: false
+SpaceAfterTemplateKeyword: false
+
+# --- includes ~ group_imports = "StdExternalCrate"
+#   1. <std>   2. <external libs>   3. "crate local"
+SortIncludes:
+  Enabled: true
+  IgnoreCase: false # = CaseSensitive
+IncludeBlocks: Regroup
+IncludeCategories:
+  # std (no extension, no slash): <vector>, <cstdint>, ...
+  - Regex: '^<[a-z_0-9]+>$'
+    Priority: 1
+  # external: <F4SE/F4SE.h>, <RE/Fallout.h>, <spdlog/...>, <Windows.h>
+  - Regex: '^<.*>$'
+    Priority: 2
+  # crate local: "Dumper.h"
+  - Regex: '^".*"$'
+    Priority: 3
+SortUsingDeclarations: LexicographicNumeric

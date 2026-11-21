@@ -1,0 +1,11 @@
+CompileFlags:
+  CompilationDatabase: build
+
+---
+# Headers are not in compile_commands.json. clangd infers their command from a
+# nearby .cpp, but drops `/std:c++23preview` while doing so (falls back to C++14,
+# so e.g. `std::filesystem` disappears). Re-add the language standard for headers.
+If:
+  PathMatch: .*\.(h|hpp|inl)
+CompileFlags:
+  Add: [/clang:-std=c++23]

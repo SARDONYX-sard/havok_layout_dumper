@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: "3.0.6"
+          actions-cache-folder: ".xmake-cache"
+          actions-cache-key: ${{ runner.os }}-xmake-release-cache-
+
+      - name: Configure
+        run: xmake f -p windows -a x64 -m releasedbg -y
+
+      - name: Test
+        run: xmake test -y
+
+      - name: Package # build/packages/<plugin>-<version>.zip
+        run: xmake package -y
+
+      - name: Create GitHub Release (gh)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "${{ github.ref_name }}" build/packages/*.zip --generate-notes

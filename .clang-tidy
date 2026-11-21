@@ -1,0 +1,40 @@
+# clang-tidy >= 22. Local: `xmake project -k compile_commands build && clang-tidy -p build <files>`
+Checks:
+  - -*
+  - bugprone-*
+  - -bugprone-easily-swappable-parameters # (type, subtype) pairs etc. by design
+  - cert-*
+  - clang-analyzer-*
+  - cppcoreguidelines-*
+  - -cppcoreguidelines-avoid-c-arrays # mirrors Havok C structs
+  - -cppcoreguidelines-avoid-do-while # noise
+  - -cppcoreguidelines-avoid-magic-numbers # Havok offsets / sizes everywhere
+  - -cppcoreguidelines-non-private-member-variables-in-classes # RE:: structs are raw memory layouts
+  - -cppcoreguidelines-pro-bounds-avoid-unchecked-container-access # indices are checked; `.at()` adds nothing
+  - -cppcoreguidelines-pro-bounds-constant-array-index # same as above
+  - -cppcoreguidelines-pro-bounds-pointer-arithmetic # reading game image memory is the job
+  - -cppcoreguidelines-pro-type-reinterpret-cast # same as above
+  - -cppcoreguidelines-pro-type-union-access # same as above
+  - misc-*
+  - -misc-include-cleaner # false positives with precompiled headers
+  - -misc-no-recursion # class graphs (parent / member classes) are recursive
+  - -misc-non-private-member-variables-in-classes # RE:: structs are raw memory layouts
+  - modernize-*
+  - -modernize-avoid-c-arrays # mirrors Havok C structs
+  - -modernize-use-trailing-return-type # style: not used
+  - performance-*
+  - -performance-no-int-to-ptr # address arithmetic on the game image
+  - readability-*
+  - -readability-function-cognitive-complexity # big switches over hkClassMember::Type
+  - -readability-identifier-length # `c`, `m`, `w` in short scopes
+  - -readability-implicit-bool-conversion # noise
+  - -readability-magic-numbers # Havok offsets / sizes everywhere
+
+WarningsAsErrors: "*"
+
+HeaderFilterRegex: '.*[\\/](src|tests)[\\/].*' # own code only (not CommonLibF4 / spdlog / catch2)
+SystemHeaders: false
+
+CheckOptions:
+  readability-braces-around-statements.ShortStatementLines: 0
+  misc-const-correctness.AnalyzeValues: false

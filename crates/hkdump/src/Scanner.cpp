@@ -51,7 +51,9 @@ namespace hkdump {
                 || raw->offset > a_objectSize) {
                 return std::nullopt;
             }
-            auto name = a_view.GetIdent(raw->name);
+            // NOTE: Member names may start with a digit. (e.g. `hkpLimitedHingeConstraintDataAtoms::2dAng`)
+            //       Rejecting it drops the class and every class referring to it (e.g. `hkpLimitedHingeConstraintData`).
+            auto name = a_view.GetIdent(raw->name, 256, true);
             if (!name) {
                 return std::nullopt;
             }

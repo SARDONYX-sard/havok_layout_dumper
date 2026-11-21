@@ -14,9 +14,12 @@ namespace hkdump {
         return Get<std::uint64_t>(a_address);
     }
 
-    std::optional<std::string> MemoryView::GetIdent(std::uint64_t a_address, std::size_t a_maxLen) const {
-        const auto is_head = [](char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'; };
-        const auto is_tail = [&](char c) { return is_head(c) || (c >= '0' && c <= '9') || c == ':'; };
+    std::optional<std::string>
+        MemoryView::GetIdent(std::uint64_t a_address, std::size_t a_maxLen, bool a_allowDigitHead) const {
+        const auto is_alpha = [](char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'; };
+        const auto is_digit = [](char c) { return c >= '0' && c <= '9'; };
+        const auto is_head = [&](char c) { return is_alpha(c) || (a_allowDigitHead && is_digit(c)); };
+        const auto is_tail = [&](char c) { return is_alpha(c) || is_digit(c) || c == ':'; };
 
         std::string result;
         for (std::size_t i = 0; i < a_maxLen; ++i) {

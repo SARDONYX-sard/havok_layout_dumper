@@ -55,7 +55,12 @@ namespace hkdump {
         [[nodiscard]] std::optional<std::uint64_t> GetPointer(std::uint64_t a_address) const;
 
         /// NUL terminated C identifier (`[A-Za-z_][A-Za-z0-9_:]*`), nullopt otherwise.
-        [[nodiscard]] std::optional<std::string> GetIdent(std::uint64_t a_address, std::size_t a_maxLen = 256) const;
+        ///
+        /// `a_allowDigitHead`: Also accept a leading digit (`[A-Za-z0-9_][A-Za-z0-9_:]*`).
+        /// Havok member names may start with a digit (e.g. `hkpLimitedHingeConstraintDataAtoms::2dAng`),
+        /// so use it only for member names. Class / enum names stay strict to keep the scan false positives low.
+        [[nodiscard]] std::optional<std::string>
+            GetIdent(std::uint64_t a_address, std::size_t a_maxLen = 256, bool a_allowDigitHead = false) const;
 
     private:
         std::uint32_t _pointerSize;

@@ -8,6 +8,7 @@
 #include <string_view>
 #include <vector>
 
+#include "ClassSerializer.h"
 #include "MemoryView.h"
 #include "Model.h"
 
@@ -29,7 +30,8 @@ namespace hkdump {
 
     /// Serializes every class of `a_db` and assigns unique file names.
     /// Duplicates get `_<hex RVA>` appended (address - `a_view.ImageBase()`).
-    [[nodiscard]] std::vector<DumpEntry> BuildDump(const ClassDb& a_db, const MemoryView& a_view);
+    [[nodiscard]] std::vector<DumpEntry>
+    BuildDump(const ClassDb& a_db, const MemoryView& a_view, JsonFormat a_format = JsonFormat::SerdeHkx);
 
     /// Writes entries into `a_outDir` (created if missing).
     [[nodiscard]] WriteResult WriteDump(const std::filesystem::path& a_outDir, std::span<const DumpEntry> a_entries);

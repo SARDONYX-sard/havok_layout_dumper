@@ -30,8 +30,8 @@ namespace hkdump {
         return result;
     }
 
-    std::vector<DumpEntry> BuildDump(const ClassDb& a_db, const MemoryView& a_view) {
-        ClassSerializer serializer{a_db, a_view};
+    std::vector<DumpEntry> BuildDump(const ClassDb& a_db, const MemoryView& a_view, JsonFormat a_format) {
+        ClassSerializer serializer{a_db, a_view, a_format};
 
         std::vector<DumpEntry> entries;
         entries.reserve(a_db.Classes().size());

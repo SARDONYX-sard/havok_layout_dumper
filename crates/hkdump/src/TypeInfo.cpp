@@ -2,6 +2,8 @@
 
 #include <array>
 #include <format>
+#include <string>
+#include <utility>
 
 #include "RE/Havok/hkClassMember.h"
 
@@ -240,27 +242,52 @@ namespace hkdump {
         return ctype;
     }
 
+    namespace {
+        constexpr std::array<std::pair<std::uint16_t, std::string_view>, 4> kFlagNames{{
+            {ALIGN_8, "ALIGN_8"},
+            {ALIGN_16, "ALIGN_16"},
+            {NOT_OWNED, "NOT_OWNED"},
+            {SERIALIZE_IGNORED, "SERIALIZE_IGNORED"},
+        }};
+
+        /// Bits without a name. DEPRECATED_SIZE_* (enum storage size) is already expressed by `vsubtype`.
+        constexpr std::uint16_t UnknownFlags(std::uint16_t a_flags) noexcept {
+            constexpr std::uint16_t known = DEPRECATED_SIZE_8 | DEPRECATED_SIZE_16 | DEPRECATED_SIZE_32 | ALIGN_8
+                | ALIGN_16 | NOT_OWNED | SERIALIZE_IGNORED;
+            return static_cast<std::uint16_t>(a_flags & ~known);
+        }
+    } // namespace
+
     std::string MakeFlags(std::uint16_t a_flags) {
         std::string result = "FLAGS_NONE";
-        if (a_flags & ALIGN_8) {
-            result += "|ALIGN_8";
+        for (const auto& [bit, name] : kFlagNames) {
+            if (a_flags & bit) {
+                result += '|';
+                result += name;
+            }
         }
-        if (a_flags & ALIGN_16) {
-            result += "|ALIGN_16";
-        }
-        if (a_flags & NOT_OWNED) {
-            result += "|NOT_OWNED";
-        }
-        if (a_flags & SERIALIZE_IGNORED) {
-            result += "|SERIALIZE_IGNORED";
-        }
-
-        // DEPRECATED_SIZE_* (enum storage size) is already expressed by `vsubtype`.
-        constexpr std::uint16_t known = DEPRECATED_SIZE_8 | DEPRECATED_SIZE_16 | DEPRECATED_SIZE_32 | ALIGN_8 | ALIGN_16
-            | NOT_OWNED | SERIALIZE_IGNORED;
-        if (const auto unknown = static_cast<std::uint16_t>(a_flags & ~known); unknown != 0) {
+        if (const auto unknown = UnknownFlags(a_flags); unknown != 0) {
             result += std::format("|0x{:x}", unknown);
         }
         return result;
+    }
+
+    std::string MakeDMergeFlags(std::uint16_t a_flags) {
+        std::string result;
+        const auto append = [&](std::string_view a_part) {
+            if (!result.empty()) {
+                result += '|';
+            }
+            result += a_part;
+        };
+        for (const auto& [bit, name] : kFlagNames) {
+            if (a_flags & bit) {
+                append(name);
+            }
+        }
+        if (const auto unknown = UnknownFlags(a_flags); unknown != 0) {
+            append(std::to_string(unknown));
+        }
+        return result.empty() ? "0" : result;
     }
 } // namespace hkdump

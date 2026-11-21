@@ -11,7 +11,47 @@
 namespace hkdump {
     using enum RE::hkClassMember::Type;
 
-    ClassSerializer::ClassSerializer(const ClassDb& a_db, const MemoryView& a_view) : _db(a_db), _view(a_view) {
+    std::optional<JsonFormat> ParseJsonFormat(std::string_view a_name) noexcept {
+        if (a_name == "serde-hkx") {
+            return JsonFormat::SerdeHkx;
+        }
+        if (a_name == "d-merge") {
+            return JsonFormat::DMerge;
+        }
+        return std::nullopt;
+    }
+
+    namespace {
+        /// havok_class_info_gen `is_ref_kind` (`nemesis` feature).
+        constexpr bool IsDMergeRefKind(std::uint8_t a_type) noexcept {
+            switch (a_type) {
+            case TYPE_CSTRING:
+            case TYPE_STRINGPTR:
+            case TYPE_VARIANT:
+            case TYPE_INT8:
+            case TYPE_INT16:
+            case TYPE_INT32:
+            case TYPE_INT64:
+            case TYPE_UINT8:
+            case TYPE_UINT16:
+            case TYPE_UINT32:
+            case TYPE_UINT64:
+            case TYPE_POINTER:
+                return true;
+            default:
+                return false;
+            }
+        }
+
+        constexpr bool IsArray(std::uint8_t a_type) noexcept {
+            return a_type == TYPE_ARRAY || a_type == TYPE_SIMPLEARRAY;
+        }
+    } // namespace
+
+    ClassSerializer::ClassSerializer(const ClassDb& a_db, const MemoryView& a_view, JsonFormat a_format)
+        : _db(a_db)
+        , _view(a_view)
+        , _format(a_format) {
         for (const auto& cls : _db.get().Classes()) {
             for (const auto& m : cls.declaredMembers) {
                 if (m.enumAddress != 0 && (m.type == TYPE_ENUM || m.type == TYPE_FLAGS)) {
@@ -48,6 +88,45 @@ namespace hkdump {
             = a_member.type == TYPE_STRUCT || (a_member.type != TYPE_POINTER && a_member.subtype == TYPE_STRUCT);
         const auto klass = _db.get().FindClass(a_member.classAddress);
         return embedded && klass && ClassHasString(*klass);
+    }
+
+    bool ClassSerializer::MemberHasRef(const MemberInfo& a_member) {
+        const auto struct_has_ref = [&] {
+            const auto klass = _db.get().FindClass(a_member.classAddress);
+            return klass && ClassHasRef(*klass);
+        };
+        if (a_member.type == TYPE_STRUCT) {
+            return struct_has_ref();
+        }
+        if (IsArray(a_member.type)) {
+            return a_member.subtype == TYPE_STRUCT ? struct_has_ref() : IsDMergeRefKind(a_member.subtype);
+        }
+        if (a_member.type == TYPE_ENUM || a_member.type == TYPE_FLAGS) {
+            return false;
+        }
+        return IsDMergeRefKind(a_member.type);
+    }
+
+    bool ClassSerializer::ClassHasRef(const ClassInfo& a_class) {
+        if (const auto it = _hasRef.find(a_class.address); it != _hasRef.end()) {
+            return it->second;
+        }
+        _hasRef[a_class.address] = false; // cycle guard
+
+        const auto member_has_ref = [this](const MemberInfo& m) {
+            if (IsDMergeRefKind(m.type) || IsDMergeRefKind(m.subtype)) {
+                return true;
+            }
+            const bool embedded = m.type == TYPE_STRUCT || (IsArray(m.type) && m.subtype == TYPE_STRUCT);
+            const auto klass = _db.get().FindClass(m.classAddress);
+            return embedded && klass && ClassHasRef(*klass);
+        };
+        const auto chain = _db.get().Chain(a_class);
+        const bool result = std::ranges::any_of(chain, [&](const ClassInfo& cls) {
+            return std::ranges::any_of(cls.declaredMembers, member_has_ref);
+        });
+        _hasRef[a_class.address] = result;
+        return result;
     }
 
     std::int64_t ClassSerializer::DefaultValue(const ClassInfo& a_class, std::size_t a_index) const {
@@ -108,6 +187,7 @@ namespace hkdump {
 
     std::string ClassSerializer::ToJson(const ClassInfo& a_class) {
         const bool x86 = _db.get().PointerSize() == 4;
+        const bool dmerge = _format == JsonFormat::DMerge;
         // Only the snapshot's architecture is known; the other layout is written as 0.
         const auto layout = [&](std::int64_t a_value) { return std::pair{x86 ? a_value : 0, x86 ? 0 : a_value}; };
 
@@ -125,9 +205,16 @@ namespace hkdump {
         if (parent) {
             w.key("parent").value(parent->get().name);
         }
-        w.key("parent_has_string").value(parent && ClassHasString(*parent));
-        w.key("vtable").value(HasVTable(a_class));
-        w.key("has_string").value(ClassHasString(a_class));
+        if (dmerge) {
+            // havok_class_info_gen `nemesis` feature: always true at class level
+            w.key("parent_has_ref").value(true);
+            w.key("vtable").value(HasVTable(a_class));
+            w.key("has_ref").value(true);
+        } else {
+            w.key("parent_has_string").value(parent && ClassHasString(*parent));
+            w.key("vtable").value(HasVTable(a_class));
+            w.key("has_string").value(ClassHasString(a_class));
+        }
 
         if (!a_class.declaredEnums.empty()) {
             w.key("enums").begin_array();
@@ -175,7 +262,11 @@ namespace hkdump {
             if (const auto e = _db.get().FindEnum(m.enumAddress)) {
                 w.key("enum_ref").value(e->get().name);
             }
-            w.key("has_string").value(MemberHasString(m));
+            if (dmerge) {
+                w.key("has_ref").value(MemberHasRef(m));
+            } else {
+                w.key("has_string").value(MemberHasString(m));
+            }
             w.key("ctype").value(MakeCType(m, _db));
             w.key("vtype").value(TypeName(m.type));
             w.key("vsubtype").value(TypeName(m.subtype));
@@ -187,7 +278,7 @@ namespace hkdump {
             w.key("type_size_x86").value(typeSize86);
             w.key("type_size_x86_64").value(typeSize64);
             w.key("arrsize").value(arrsize);
-            w.key("flags").value(MakeFlags(m.flags));
+            w.key("flags").value(dmerge ? MakeDMergeFlags(m.flags) : MakeFlags(m.flags));
             w.key("default").value(DefaultValue(a_class, i));
             w.end_object();
         }

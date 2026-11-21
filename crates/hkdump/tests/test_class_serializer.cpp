@@ -20,9 +20,11 @@ namespace {
         hkdump::ClassDb db;
         hkdump::ClassSerializer serializer;
 
-        explicit Context(std::initializer_list<std::uint64_t> a_roots)
+        explicit Context(
+            std::initializer_list<std::uint64_t> a_roots, hkdump::JsonFormat a_format = hkdump::JsonFormat::SerdeHkx
+        )
             : db(testing::Load(a_roots))
-            , serializer(db, view) {}
+            , serializer(db, view, a_format) {}
 
         [[nodiscard]] const hkdump::ClassInfo& Class(const fixtures::hkClass& a_class) const {
             return Get(db, Addr(a_class));
@@ -149,4 +151,87 @@ TEST_CASE("DefaultValue reads hkClass::m_defaults", "[serializer]") {
     CHECK(ctx.serializer.DefaultValue(ctx.Class(hkAabb), 0) == 0); // no defaults table
 
     CHECK_THAT(ctx.Json(WithDefaults), ContainsSubstring(R"("default": 1077936128)"));
+}
+
+TEST_CASE("ParseJsonFormat", "[serializer]") {
+    CHECK(hkdump::ParseJsonFormat("serde-hkx") == hkdump::JsonFormat::SerdeHkx);
+    CHECK(hkdump::ParseJsonFormat("d-merge") == hkdump::JsonFormat::DMerge);
+    CHECK_FALSE(hkdump::ParseJsonFormat("serde_hkx").has_value());
+}
+
+TEST_CASE("ToJson matches d-merge-serde-hkx class JSON (x86 fields zeroed)", "[serializer]") {
+    Context ctx{{Addr(hkAabb)}, hkdump::JsonFormat::DMerge};
+
+    // d-merge-serde-hkx/assets/classes/hkAabb.json with `*_x86` = 0
+    CHECK(ctx.Json(hkAabb) == R"({
+  "name": "hkAabb",
+  "version": 0,
+  "signature": "0x4a948b16",
+  "size_x86": 0,
+  "size_x86_64": 32,
+  "parent_has_ref": true,
+  "vtable": false,
+  "has_ref": true,
+  "members": [
+    {
+      "name": "min",
+      "has_ref": false,
+      "ctype": "hkVector4",
+      "vtype": "TYPE_VECTOR4",
+      "vsubtype": "TYPE_VOID",
+      "offset_x86": 0,
+      "offset_x86_64": 0,
+      "type_size_x86": 0,
+      "type_size_x86_64": 16,
+      "arrsize": 0,
+      "flags": "0",
+      "default": 0
+    },
+    {
+      "name": "max",
+      "has_ref": false,
+      "ctype": "hkVector4",
+      "vtype": "TYPE_VECTOR4",
+      "vsubtype": "TYPE_VOID",
+      "offset_x86": 0,
+      "offset_x86_64": 16,
+      "type_size_x86": 0,
+      "type_size_x86_64": 16,
+      "arrsize": 0,
+      "flags": "0",
+      "default": 0
+    }
+  ]
+}
+)");
+
+    Context refObj{{Addr(hkReferencedObject)}, hkdump::JsonFormat::DMerge};
+    CHECK_THAT(refObj.Json(hkReferencedObject), ContainsSubstring(R"("flags": "SERIALIZE_IGNORED")"));
+}
+
+TEST_CASE("d-merge has_ref (nemesis rule)", "[serializer]") {
+    Context ctx{
+        {Addr(Named), Addr(NamedChild), Addr(Holder), Addr(hkAabb), Addr(WithDefaults)}, hkdump::JsonFormat::DMerge
+    };
+    auto& s = ctx.serializer;
+
+    CHECK(s.ClassHasRef(ctx.Class(Named)));
+    CHECK(s.ClassHasRef(ctx.Class(NamedChild))); // inherited
+    CHECK(s.ClassHasRef(ctx.Class(Holder)));
+    CHECK_FALSE(s.ClassHasRef(ctx.Class(hkAabb))); // hkVector4 only
+
+    const auto& holder = ctx.Class(Holder).declaredMembers;
+    CHECK(s.MemberHasRef(holder.at(0))); // pointers count
+    CHECK(s.MemberHasRef(holder.at(1))); // embedded struct with a string
+    CHECK(s.MemberHasRef(holder.at(2))); // hkArray<struct>
+    CHECK(s.MemberHasRef(holder.at(3))); // integers count
+
+    const auto& withDefaults = ctx.Class(WithDefaults).declaredMembers;
+    CHECK_FALSE(s.MemberHasRef(withDefaults.at(0))); // hkReal
+    CHECK_FALSE(s.MemberHasRef(withDefaults.at(2))); // enums never
+
+    // class level is always true, even without references
+    const auto json = ctx.Json(hkAabb);
+    CHECK_THAT(json, ContainsSubstring(R"("parent_has_ref": true)"));
+    CHECK_THAT(json, ContainsSubstring(R"("has_ref": true)"));
 }

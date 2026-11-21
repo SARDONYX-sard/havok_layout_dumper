@@ -92,3 +92,11 @@ TEST_CASE("MakeFlags", "[type_info]") {
     // unknown bits are kept visible
     CHECK(hkdump::MakeFlags(0x0800) == "FLAGS_NONE|0x800");
 }
+
+TEST_CASE("MakeDMergeFlags", "[type_info]") {
+    CHECK(hkdump::MakeDMergeFlags(FLAGS_NONE) == "0");
+    CHECK(hkdump::MakeDMergeFlags(DEPRECATED_SIZE_8) == "0");
+    CHECK(hkdump::MakeDMergeFlags(SERIALIZE_IGNORED) == "SERIALIZE_IGNORED");
+    CHECK(hkdump::MakeDMergeFlags(ALIGN_16 | SERIALIZE_IGNORED) == "ALIGN_16|SERIALIZE_IGNORED");
+    CHECK(hkdump::MakeDMergeFlags(ALIGN_8 | 0x4000) == "ALIGN_8|16384"); // unknown bits: decimal
+}

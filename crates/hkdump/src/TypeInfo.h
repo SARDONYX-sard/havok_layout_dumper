@@ -21,4 +21,8 @@ namespace hkdump {
 
     /// serde-hkx `flags` string, e.g. `FLAGS_NONE|ALIGN_16|SERIALIZE_IGNORED`.
     [[nodiscard]] std::string MakeFlags(std::uint16_t a_flags);
+
+    /// d-merge-serde-hkx `flags` string (Rust `bitflags` display): `0` when empty, else
+    /// e.g. `ALIGN_16|SERIALIZE_IGNORED` (no `FLAGS_NONE`); unknown bits as one decimal number.
+    [[nodiscard]] std::string MakeDMergeFlags(std::uint16_t a_flags);
 } // namespace hkdump
